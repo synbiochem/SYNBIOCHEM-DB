@@ -102,3 +102,7 @@ ENV/
 
 /.project
 /.pydevproject
+/**/import.report
+/**/raw*.csv
+/**/node*.csv
+/**/rels*.csv

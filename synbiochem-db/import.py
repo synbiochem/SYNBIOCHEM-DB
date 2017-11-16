@@ -35,14 +35,18 @@ def import_dts(filename):
 
 def get_neo4j_csvs(df):
     '''Get Neo4j csvs.'''
+
+    # Get Experiment:
     exp_df = pd.DataFrame(df['Experiment Name/Revision'].values,
                           columns=['exp_id:ID'])
     exp_df[':LABEL'] = 'Experiment'
 
+    # Get Person:
     person_df = pd.DataFrame(df['Experimentalist'].values,
                              columns=['name:ID'])
     person_df[':LABEL'] = 'Person'
 
+    # Get Plate:
     plate_df = pd.DataFrame(df[['Analysis Plate Dilution Factor',
                                 'Date Created (yymmdd)',
                                 'Induction time',
@@ -55,26 +59,47 @@ def get_neo4j_csvs(df):
                                      'date_created',
                                      'induction_time',
                                      'lab_archives_url',
-                                     'num_well_plates',
+                                     'num_well_plates:int',
                                      'plate_id:ID',
                                      'instrument',
-                                     'temperature'])
+                                     'temperature:float'])
     plate_df[':LABEL'] = 'Plate'
 
-    return [exp_df, person_df, plate_df], []
+    # Get Relationships:
+    rels = []
+
+    rels.append(df[['Plate ID (yymmdd-inst-exp)',
+                    'Experiment Name/Revision']].values[0].tolist() +
+                ['PART_OF'])
+
+    rels.append(df[['Plate ID (yymmdd-inst-exp)',
+                    'Experimentalist']].values[0].tolist() +
+                ['CREATED_BY'])
+
+    rels_df = pd.DataFrame.from_records(rels, columns=[':START_ID', ':END_ID',
+                                                       ':TYPE'])
+
+    return [exp_df, person_df, plate_df], [rels_df]
+
+
+def _get_filenames(dfs, prefix):
+    '''Get filenames from DataFrames.'''
+    filenames = []
+
+    for idx, node_df in enumerate(dfs):
+        filename = prefix + str(idx) + '.csv'
+        node_df.to_csv(filename, index=False)
+        filenames.append(filename)
+
+    return filenames
 
 
 def main(args):
     '''main method.'''
     df = import_dts(args[0])
-    node_dfs, rel_dfs = get_neo4j_csvs(df)
-    node_files = []
-    rels_files = []
-
-    for idx, node_df in enumerate(node_dfs):
-        filename = 'node' + str(idx) + '.csv'
-        node_df.to_csv(filename, index=False)
-        node_files.append(filename)
+    node_dfs, rels_dfs = get_neo4j_csvs(df)
+    node_files = _get_filenames(node_dfs, 'node')
+    rels_files = _get_filenames(rels_dfs, 'rels')
 
     utils.create_db(args[1], node_files, rels_files)
 
