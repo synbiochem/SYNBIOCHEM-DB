@@ -101,9 +101,24 @@ def import_strain(filename):
 
 def parse_strain(df, plate_id):
     '''Parse strain.'''
-    print plate_id
+    samples = [zip(df.index.values,
+                   [col for _ in range(len(df.index))],
+                   df[col].values)
+               for col in df.columns]
 
-    return [], []
+    samples_df = pd.DataFrame([pos for col in samples for pos in col],
+                              columns=['loc_row', 'loc_col', 'sample_id'])
+
+    samples_df.dropna(how='any', inplace=True)
+    samples_df[':LABEL'] = 'Sample'
+    samples_df['loc_well:ID'] = samples_df['loc_row'] + samples_df['loc_col']
+
+    rels_df = pd.DataFrame(samples_df['loc_well:ID'], columns=['loc_well:ID'])
+    rels_df.columns = [':END_ID']
+    rels_df[':START_ID'] = plate_id
+    rels_df[':TYPE'] = 'CONTAINS'
+
+    return [samples_df], [rels_df]
 
 
 def _get_filenames(dfs, prefix):
@@ -122,13 +137,15 @@ def main(args):
     '''main method.'''
     metadata_df = import_metadata(args[0])
     node_dfs, rels_dfs, plate_id = parse_metadata(metadata_df)
-    node_files = _get_filenames(node_dfs, 'node')
-    rels_files = _get_filenames(rels_dfs, 'rels')
 
     strain_df = import_strain(args[1])
-    node_dfs, rels_dfs = parse_strain(strain_df, plate_id)
-    node_files.extend(_get_filenames(node_dfs, 'node'))
-    rels_files.extend(_get_filenames(rels_dfs, 'rels'))
+    st_node_dfs, st_rels_dfs = parse_strain(strain_df, plate_id)
+
+    node_dfs.extend(st_node_dfs)
+    rels_dfs.extend(st_rels_dfs)
+
+    node_files = _get_filenames(node_dfs, 'node')
+    rels_files = _get_filenames(rels_dfs, 'rels')
 
     utils.create_db(args[2], node_files, rels_files)
 
