@@ -9,8 +9,8 @@ from gg_utils.neo4j import utils
 import pandas as pd
 
 
-def import_dts(filename):
-    '''Import a data tracking sheet.'''
+def import_metadata(filename):
+    '''Import metadata.'''
 
     values = {}
     with open(filename, 'rU') as fle:
@@ -29,12 +29,12 @@ def import_dts(filename):
                     values[tokens[0]] = tokens[1]
 
     df = pd.DataFrame(values, index=[0])
-    df.to_csv('raw.csv', index=False)
+    df.to_csv('metadata.csv', index=False)
     return df
 
 
-def get_neo4j_csvs(df):
-    '''Get Neo4j csvs.'''
+def parse_metadata(df):
+    '''Parse metadata.'''
     rels = []
 
     # Get Experiment:
@@ -104,8 +104,8 @@ def _get_filenames(dfs, prefix):
 
 def main(args):
     '''main method.'''
-    df = import_dts(args[0])
-    node_dfs, rels_dfs = get_neo4j_csvs(df)
+    df = import_metadata(args[0])
+    node_dfs, rels_dfs = parse_metadata(df)
     node_files = _get_filenames(node_dfs, 'node')
     rels_files = _get_filenames(rels_dfs, 'rels')
 
