@@ -87,7 +87,23 @@ def parse_metadata(df):
     rels_df = pd.DataFrame.from_records(rels, columns=[':START_ID', ':END_ID',
                                                        ':TYPE'])
 
-    return [exp_df, person_df, plate_df, chem_df], [rels_df]
+    plate_id = df[['Plate ID (yymmdd-inst-exp)']].values[0][0]
+    return [exp_df, person_df, plate_df, chem_df], [rels_df], plate_id
+
+
+def import_strain(filename):
+    '''Import strain.'''
+    df = pd.read_csv(filename, usecols=range(13))[:8]
+    df.set_index('PLATE #1', inplace=True)
+    df.to_csv('strain.csv')
+    return df
+
+
+def parse_strain(df, plate_id):
+    '''Parse strain.'''
+    print plate_id
+
+    return [], []
 
 
 def _get_filenames(dfs, prefix):
@@ -104,12 +120,17 @@ def _get_filenames(dfs, prefix):
 
 def main(args):
     '''main method.'''
-    df = import_metadata(args[0])
-    node_dfs, rels_dfs = parse_metadata(df)
+    metadata_df = import_metadata(args[0])
+    node_dfs, rels_dfs, plate_id = parse_metadata(metadata_df)
     node_files = _get_filenames(node_dfs, 'node')
     rels_files = _get_filenames(rels_dfs, 'rels')
 
-    utils.create_db(args[1], node_files, rels_files)
+    strain_df = import_strain(args[1])
+    node_dfs, rels_dfs = parse_strain(strain_df, plate_id)
+    node_files.extend(_get_filenames(node_dfs, 'node'))
+    rels_files.extend(_get_filenames(rels_dfs, 'rels'))
+
+    utils.create_db(args[2], node_files, rels_files)
 
 
 if __name__ == '__main__':
