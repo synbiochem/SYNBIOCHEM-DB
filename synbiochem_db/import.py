@@ -1,8 +1,13 @@
 '''
-Created on 15 Nov 2017
+SYNBIOCHEM-DB (c) University of Manchester 2017
 
-@author: neilswainston
+SYNBIOCHEM-DB is licensed under the MIT License.
+
+To view a copy of this license, visit <http://opensource.org/licenses/MIT/>.
+
+@author:  neilswainston
 '''
+# pylint: disable=invalid-name
 import sys
 
 from gg_utils.neo4j import utils
@@ -11,8 +16,8 @@ import pandas as pd
 
 def import_metadata(filename):
     '''Import metadata.'''
-
     values = {}
+
     with open(filename, 'rU') as fle:
         in_options = False
 
