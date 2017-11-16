@@ -35,6 +35,7 @@ def import_dts(filename):
 
 def get_neo4j_csvs(df):
     '''Get Neo4j csvs.'''
+    rels = []
 
     # Get Experiment:
     exp_df = pd.DataFrame(df['Experiment Name/Revision'].values,
@@ -65,9 +66,12 @@ def get_neo4j_csvs(df):
                                      'temperature:float'])
     plate_df[':LABEL'] = 'Plate'
 
-    # Get Relationships:
-    rels = []
+    # Get Chemical:
+    chem_df = pd.DataFrame(df.filter(regex='Target').transpose())
+    chem_df.columns = ['chebi_id:ID']
+    chem_df[':LABEL'] = 'Chemical'
 
+    # Get Relationships:
     rels.append(df[['Plate ID (yymmdd-inst-exp)',
                     'Experiment Name/Revision']].values[0].tolist() +
                 ['PART_OF'])
@@ -76,10 +80,14 @@ def get_neo4j_csvs(df):
                     'Experimentalist']].values[0].tolist() +
                 ['CREATED_BY'])
 
+    for chebi_id in chem_df['chebi_id:ID']:
+        rels.append(df[['Plate ID (yymmdd-inst-exp)']].values[0].tolist() +
+                    [chebi_id, 'HAS_TARGET'])
+
     rels_df = pd.DataFrame.from_records(rels, columns=[':START_ID', ':END_ID',
                                                        ':TYPE'])
 
-    return [exp_df, person_df, plate_df], [rels_df]
+    return [exp_df, person_df, plate_df, chem_df], [rels_df]
 
 
 def _get_filenames(dfs, prefix):
