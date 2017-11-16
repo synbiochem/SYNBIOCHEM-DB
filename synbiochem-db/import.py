@@ -106,19 +106,48 @@ def parse_strain(df, plate_id):
                    df[col].values)
                for col in df.columns]
 
-    samples_df = pd.DataFrame([pos for col in samples for pos in col],
-                              columns=['loc_row', 'loc_col', 'sample_id'])
+    replicate_df = pd.DataFrame([pos for col in samples for pos in col],
+                                columns=['loc_row', 'loc_col', 'rep_id'])
 
-    samples_df.dropna(how='any', inplace=True)
-    samples_df[':LABEL'] = 'Sample'
-    samples_df['loc_well:ID'] = samples_df['loc_row'] + samples_df['loc_col']
+    replicate_df.dropna(how='any', inplace=True)
+    replicate_df[':LABEL'] = 'Replicate'
+    replicate_df['loc_well:ID'] = \
+        replicate_df['loc_row'] + replicate_df['loc_col']
 
-    rels_df = pd.DataFrame(samples_df['loc_well:ID'], columns=['loc_well:ID'])
-    rels_df.columns = [':END_ID']
-    rels_df[':START_ID'] = plate_id
-    rels_df[':TYPE'] = 'CONTAINS'
+    replicate_rels_df = pd.DataFrame(
+        replicate_df['loc_well:ID'], columns=['loc_well:ID'])
+    replicate_rels_df.columns = [':END_ID']
+    replicate_rels_df[':START_ID'] = plate_id
+    replicate_rels_df[':TYPE'] = 'CONTAINS'
 
-    return [samples_df], [rels_df]
+    sample_df = pd.DataFrame(columns=['host', 'plasmid', 'replicate'])
+    sample_df[sample_df.columns] = \
+        replicate_df['rep_id'].str.split('_', expand=True)
+    sample_df['loc_well:ID'] = replicate_df['loc_well:ID']
+    sample_df.drop('replicate', axis=1, inplace=True)
+
+    host_df = pd.DataFrame(sample_df['host'], columns=['host'])
+    host_df.columns = ['host_id:ID']
+    host_df.drop_duplicates(inplace=True)
+    host_df[':LABEL'] = 'Host'
+
+    plasmid_df = pd.DataFrame(sample_df['plasmid'], columns=['plasmid'])
+    plasmid_df.columns = ['plasmid_id:ID']
+    plasmid_df.drop_duplicates(inplace=True)
+    plasmid_df[':LABEL'] = 'Plasmid'
+
+    host_rels_df = pd.DataFrame(sample_df[['host', 'loc_well:ID']],
+                                columns=['host', 'loc_well:ID'])
+    host_rels_df.columns = [':START_ID', ':END_ID']
+    host_rels_df[':TYPE'] = 'FOUND_IN'
+
+    plasmid_rels_df = pd.DataFrame(sample_df[['plasmid', 'loc_well:ID']],
+                                   columns=['plasmid', 'loc_well:ID'])
+    plasmid_rels_df.columns = [':START_ID', ':END_ID']
+    plasmid_rels_df[':TYPE'] = 'FOUND_IN'
+
+    return [replicate_df, host_df, plasmid_df], \
+        [replicate_rels_df, host_rels_df, plasmid_rels_df]
 
 
 def _get_filenames(dfs, prefix):
