@@ -106,29 +106,18 @@ def import_strain(filename):
 
 def parse_strain(df, plate_id):
     '''Parse strain.'''
-    samples = [zip(df.index.values,
-                   [col for _ in range(len(df.index))],
-                   df[col].values)
-               for col in df.columns]
-
-    replicate_df = pd.DataFrame([pos for col in samples for pos in col],
-                                columns=['loc_row', 'loc_col', 'rep_id'])
-
-    replicate_df.dropna(how='any', inplace=True)
-    replicate_df[':LABEL'] = 'Replicate'
-    replicate_df['loc_well:ID'] = \
-        replicate_df['loc_row'] + replicate_df['loc_col']
+    plate_df = _get_plate_df(df, 'Replicate')
 
     replicate_rels_df = pd.DataFrame(
-        replicate_df['loc_well:ID'], columns=['loc_well:ID'])
+        plate_df['loc_well:ID'], columns=['loc_well:ID'])
     replicate_rels_df.columns = [':END_ID']
     replicate_rels_df[':START_ID'] = plate_id
     replicate_rels_df[':TYPE'] = 'CONTAINS'
 
     sample_df = pd.DataFrame(columns=['host', 'plasmid', 'replicate'])
     sample_df[sample_df.columns] = \
-        replicate_df['rep_id'].str.split('_', expand=True)
-    sample_df['loc_well:ID'] = replicate_df['loc_well:ID']
+        plate_df['id'].str.split('_', expand=True)
+    sample_df['loc_well:ID'] = plate_df['loc_well:ID']
     sample_df.drop('replicate', axis=1, inplace=True)
 
     host_df = pd.DataFrame(sample_df['host'], columns=['host'])
@@ -151,8 +140,33 @@ def parse_strain(df, plate_id):
     plasmid_rels_df.columns = [':START_ID', ':END_ID']
     plasmid_rels_df[':TYPE'] = 'FOUND_IN'
 
-    return [replicate_df, host_df, plasmid_df], \
+    return [plate_df, host_df, plasmid_df], \
         [replicate_rels_df, host_rels_df, plasmid_rels_df]
+
+
+def import_media(filename):
+    '''Import media.'''
+    df = pd.read_csv(filename, usecols=range(13))[:8]
+    df.set_index('PLATE #1', inplace=True)
+    df.to_csv('media.csv')
+    return df
+
+
+def parse_media(df):
+    '''Parse media.'''
+    plate_df = _get_plate_df(df, 'Media')
+
+    media_df = pd.DataFrame(plate_df['id'])
+    media_df.columns = ['id:ID']
+    media_df.drop_duplicates(inplace=True)
+    media_df[':LABEL'] = 'Media'
+
+    media_rels_df = pd.DataFrame(plate_df[['id', 'loc_well:ID']],
+                                 columns=['id', 'loc_well:ID'])
+    media_rels_df.columns = [':START_ID', ':END_ID']
+    media_rels_df[':TYPE'] = 'FOUND_IN'
+
+    return [media_df], [media_rels_df]
 
 
 def _get_filenames(dfs, prefix):
@@ -167,6 +181,24 @@ def _get_filenames(dfs, prefix):
     return filenames
 
 
+def _get_plate_df(df, label):
+    '''Get plate DataFrame.'''
+    samples = [zip(df.index.values,
+                   [col for _ in range(len(df.index))],
+                   df[col].values)
+               for col in df.columns]
+
+    plate_df = pd.DataFrame([pos for col in samples for pos in col],
+                            columns=['loc_row', 'loc_col', 'id'])
+
+    plate_df.dropna(how='any', inplace=True)
+    plate_df[':LABEL'] = label
+    plate_df['loc_well:ID'] = \
+        plate_df['loc_row'] + plate_df['loc_col']
+
+    return plate_df
+
+
 def main(args):
     '''main method.'''
     metadata_df = import_metadata(args[0])
@@ -178,10 +210,16 @@ def main(args):
     node_dfs.extend(st_node_dfs)
     rels_dfs.extend(st_rels_dfs)
 
+    media_df = import_media(args[2])
+    md_node_dfs, md_rels_dfs = parse_media(media_df)
+
+    node_dfs.extend(md_node_dfs)
+    rels_dfs.extend(md_rels_dfs)
+
     node_files = _get_filenames(node_dfs, 'node')
     rels_files = _get_filenames(rels_dfs, 'rels')
 
-    utils.create_db(args[2], node_files, rels_files)
+    utils.create_db(args[3], node_files, rels_files)
 
 
 if __name__ == '__main__':
