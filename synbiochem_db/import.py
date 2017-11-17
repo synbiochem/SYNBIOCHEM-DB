@@ -61,10 +61,7 @@ def import_sts(xl_filename, neo4j_root):
     utils.create_db(neo4j_root, node_files, rels_files)
 
     # Clean-up:
-    for fle in node_files + rels_files:
-        os.remove(fle)
-
-    shutil.rmtree(dir_name)
+    _clean_up(node_files, rels_files, dir_name)
 
 
 def import_metadata(filename):
@@ -263,6 +260,14 @@ def _get_plate_df(df, label, val_col='id'):
         plate_df['loc_row'] + plate_df['loc_col']
 
     return plate_df
+
+
+def _clean_up(node_files, rels_files, dir_name):
+    '''Clean-up tempfiles.'''
+    for fle in node_files + rels_files:
+        os.remove(fle)
+
+    shutil.rmtree(dir_name)
 
 
 def main(args):
