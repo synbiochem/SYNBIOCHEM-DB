@@ -96,11 +96,10 @@ def parse_metadata(df):
     return [exp_df, person_df, plate_df, chem_df], [rels_df], plate_id
 
 
-def import_strain(filename):
-    '''Import strain.'''
+def import_plate(filename):
+    '''Import plate.'''
     df = pd.read_csv(filename, usecols=range(13))[:8]
     df.set_index('PLATE #1', inplace=True)
-    df.to_csv('strain.csv')
     return df
 
 
@@ -144,29 +143,21 @@ def parse_strain(df, plate_id):
         [replicate_rels_df, host_rels_df, plasmid_rels_df]
 
 
-def import_media(filename):
-    '''Import media.'''
-    df = pd.read_csv(filename, usecols=range(13))[:8]
-    df.set_index('PLATE #1', inplace=True)
-    df.to_csv('media.csv')
-    return df
+def parse_plate(df, label):
+    '''Parse plate data.'''
+    plate_df = _get_plate_df(df, label)
 
+    plate_vals_df = pd.DataFrame(plate_df['id'])
+    plate_vals_df.columns = ['id:ID']
+    plate_vals_df.drop_duplicates(inplace=True)
+    plate_vals_df[':LABEL'] = label
 
-def parse_media(df):
-    '''Parse media.'''
-    plate_df = _get_plate_df(df, 'Media')
+    plate_vals_rels_df = pd.DataFrame(plate_df[['id', 'loc_well:ID']],
+                                      columns=['id', 'loc_well:ID'])
+    plate_vals_rels_df.columns = [':START_ID', ':END_ID']
+    plate_vals_rels_df[':TYPE'] = 'FOUND_IN'
 
-    media_df = pd.DataFrame(plate_df['id'])
-    media_df.columns = ['id:ID']
-    media_df.drop_duplicates(inplace=True)
-    media_df[':LABEL'] = 'Media'
-
-    media_rels_df = pd.DataFrame(plate_df[['id', 'loc_well:ID']],
-                                 columns=['id', 'loc_well:ID'])
-    media_rels_df.columns = [':START_ID', ':END_ID']
-    media_rels_df[':TYPE'] = 'FOUND_IN'
-
-    return [media_df], [media_rels_df]
+    return [plate_vals_df], [plate_vals_rels_df]
 
 
 def _get_filenames(dfs, prefix):
@@ -201,25 +192,32 @@ def _get_plate_df(df, label):
 
 def main(args):
     '''main method.'''
+    # Parse metadata:
     metadata_df = import_metadata(args[0])
     node_dfs, rels_dfs, plate_id = parse_metadata(metadata_df)
 
-    strain_df = import_strain(args[1])
-    st_node_dfs, st_rels_dfs = parse_strain(strain_df, plate_id)
-
+    # Parse strain:
+    st_node_dfs, st_rels_dfs = parse_strain(import_plate(args[1]), plate_id)
     node_dfs.extend(st_node_dfs)
     rels_dfs.extend(st_rels_dfs)
 
-    media_df = import_media(args[2])
-    md_node_dfs, md_rels_dfs = parse_media(media_df)
-
+    # Parse media:
+    md_node_dfs, md_rels_dfs = parse_plate(import_plate(args[2]), 'Media')
     node_dfs.extend(md_node_dfs)
     rels_dfs.extend(md_rels_dfs)
 
+    # Parse treatment:
+    trt_node_dfs, trt_rels_dfs = parse_plate(import_plate(args[3]),
+                                             'Treatment')
+    node_dfs.extend(trt_node_dfs)
+    rels_dfs.extend(trt_rels_dfs)
+
+    # Convert DataFrames to csv:
     node_files = _get_filenames(node_dfs, 'node')
     rels_files = _get_filenames(rels_dfs, 'rels')
 
-    utils.create_db(args[3], node_files, rels_files)
+    # Populate database:
+    utils.create_db(args[4], node_files, rels_files)
 
 
 if __name__ == '__main__':
