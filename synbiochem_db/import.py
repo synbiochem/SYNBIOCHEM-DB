@@ -97,9 +97,9 @@ def parse_metadata(df):
 
 
 def import_plate(filename):
-    '''Import plate.'''
+    '''Import plates.'''
     df = pd.read_csv(filename, usecols=range(13))[:8]
-    df.set_index('PLATE #1', inplace=True)
+    df.set_index(df.columns[0], inplace=True)
     return df
 
 
@@ -160,6 +160,31 @@ def parse_plate(df, label):
     return [plate_vals_df], [plate_vals_rels_df]
 
 
+def parse_ods(dfs, timepoints=None):
+    '''Parse OD data.'''
+    if not timepoints:
+        timepoints = ['induction', 'harvest']
+
+    data_dfs = [_get_plate_df(df, 'OD', 'value:float') for df in dfs]
+    data_rels_dfs = []
+
+    for data_df, timepoint in zip(data_dfs, timepoints):
+        data_df['id:ID'] = data_df['loc_well:ID'] + '_OD_' + timepoint
+        data_df['timepoint'] = timepoint
+        data_df['unit'] = 'unitless'
+
+        data_rels_df = pd.DataFrame(data_df[['id:ID', 'loc_well:ID']],
+                                    columns=['id:ID', 'loc_well:ID'])
+        data_rels_df.columns = [':END_ID', ':START_ID']
+        data_rels_df[':TYPE'] = 'HAS_DATA'
+        data_rels_dfs.append(data_rels_df)
+
+        columns = ['loc_row', 'loc_col', 'loc_well:ID']
+        data_df.drop(columns, axis=1, inplace=True)
+
+    return data_dfs, data_rels_dfs
+
+
 def _get_filenames(dfs, prefix):
     '''Get filenames from DataFrames.'''
     filenames = []
@@ -172,7 +197,7 @@ def _get_filenames(dfs, prefix):
     return filenames
 
 
-def _get_plate_df(df, label):
+def _get_plate_df(df, label, val_col='id'):
     '''Get plate DataFrame.'''
     samples = [zip(df.index.values,
                    [col for _ in range(len(df.index))],
@@ -180,7 +205,7 @@ def _get_plate_df(df, label):
                for col in df.columns]
 
     plate_df = pd.DataFrame([pos for col in samples for pos in col],
-                            columns=['loc_row', 'loc_col', 'id'])
+                            columns=['loc_row', 'loc_col', val_col])
 
     plate_df.dropna(how='any', inplace=True)
     plate_df[':LABEL'] = label
@@ -197,7 +222,8 @@ def main(args):
     node_dfs, rels_dfs, plate_id = parse_metadata(metadata_df)
 
     # Parse strain:
-    st_node_dfs, st_rels_dfs = parse_strain(import_plate(args[1]), plate_id)
+    st_node_dfs, st_rels_dfs = parse_strain(import_plate(args[1]),
+                                            plate_id)
     node_dfs.extend(st_node_dfs)
     rels_dfs.extend(st_rels_dfs)
 
@@ -212,12 +238,18 @@ def main(args):
     node_dfs.extend(trt_node_dfs)
     rels_dfs.extend(trt_rels_dfs)
 
+    # Parse ODS:
+    trt_node_dfs, trt_rels_dfs = parse_ods([import_plate(args[4]),
+                                            import_plate(args[5])])
+    node_dfs.extend(trt_node_dfs)
+    rels_dfs.extend(trt_rels_dfs)
+
     # Convert DataFrames to csv:
     node_files = _get_filenames(node_dfs, 'node')
     rels_files = _get_filenames(rels_dfs, 'rels')
 
     # Populate database:
-    utils.create_db(args[4], node_files, rels_files)
+    utils.create_db(args[6], node_files, rels_files)
 
 
 if __name__ == '__main__':
