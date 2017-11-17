@@ -8,10 +8,63 @@ To view a copy of this license, visit <http://opensource.org/licenses/MIT/>.
 @author:  neilswainston
 '''
 # pylint: disable=invalid-name
+import os
+import shutil
 import sys
 
 from gg_utils.neo4j import utils
 import pandas as pd
+from synbiochem_db import xl_converter
+
+
+def import_sts(xl_filename, neo4j_root):
+    '''Import a sample tracking sheet.'''
+    # Parse metadata:
+    dir_name = xl_converter.convert(xl_filename)
+
+    metadata_df = import_metadata(os.path.join(dir_name, 'Metadata.csv'))
+    node_dfs, rels_dfs, plate_id = parse_metadata(metadata_df)
+
+    # Parse strain:
+    st_node_dfs, st_rels_dfs = \
+        parse_strain(import_plate(os.path.join(dir_name, 'Strain.csv')),
+                     plate_id)
+    node_dfs.extend(st_node_dfs)
+    rels_dfs.extend(st_rels_dfs)
+
+    # Parse media:
+    md_node_dfs, md_rels_dfs = parse_plate(import_plate(
+        os.path.join(dir_name, 'Media.csv')), 'Media')
+    node_dfs.extend(md_node_dfs)
+    rels_dfs.extend(md_rels_dfs)
+
+    # Parse treatment:
+    trt_node_dfs, trt_rels_dfs = \
+        parse_plate(import_plate(os.path.join(dir_name, 'Treatment.csv')),
+                    'Treatment')
+    node_dfs.extend(trt_node_dfs)
+    rels_dfs.extend(trt_rels_dfs)
+
+    # Parse ODS:
+    trt_node_dfs, trt_rels_dfs = \
+        parse_ods([import_plate(os.path.join(dir_name, 'OD induction.csv')),
+                   import_plate(os.path.join(dir_name, 'OD harvest.csv'))])
+
+    node_dfs.extend(trt_node_dfs)
+    rels_dfs.extend(trt_rels_dfs)
+
+    # Convert DataFrames to csv:
+    node_files = _get_filenames(node_dfs, 'node')
+    rels_files = _get_filenames(rels_dfs, 'rels')
+
+    # Populate database:
+    utils.create_db(neo4j_root, node_files, rels_files)
+
+    # Clean-up:
+    for fle in node_files + rels_files:
+        os.remove(fle)
+
+    shutil.rmtree(dir_name)
 
 
 def import_metadata(filename):
@@ -34,7 +87,6 @@ def import_metadata(filename):
                     values[tokens[0]] = tokens[1]
 
     df = pd.DataFrame(values, index=[0])
-    df.to_csv('metadata.csv', index=False)
     return df
 
 
@@ -57,7 +109,6 @@ def parse_metadata(df):
                                 'Date Created (yymmdd)',
                                 'Induction time',
                                 'Lab Archives URL',
-                                'Number of Well Plates',
                                 'Plate ID (yymmdd-inst-exp)',
                                 'Technology Type (e.g. GCMS)',
                                 'Temperature']].values,
@@ -65,7 +116,6 @@ def parse_metadata(df):
                                      'date_created',
                                      'induction_time',
                                      'lab_archives_url',
-                                     'num_well_plates:int',
                                      'plate_id:ID',
                                      'instrument',
                                      'temperature:float'])
@@ -217,39 +267,7 @@ def _get_plate_df(df, label, val_col='id'):
 
 def main(args):
     '''main method.'''
-    # Parse metadata:
-    metadata_df = import_metadata(args[0])
-    node_dfs, rels_dfs, plate_id = parse_metadata(metadata_df)
-
-    # Parse strain:
-    st_node_dfs, st_rels_dfs = parse_strain(import_plate(args[1]),
-                                            plate_id)
-    node_dfs.extend(st_node_dfs)
-    rels_dfs.extend(st_rels_dfs)
-
-    # Parse media:
-    md_node_dfs, md_rels_dfs = parse_plate(import_plate(args[2]), 'Media')
-    node_dfs.extend(md_node_dfs)
-    rels_dfs.extend(md_rels_dfs)
-
-    # Parse treatment:
-    trt_node_dfs, trt_rels_dfs = parse_plate(import_plate(args[3]),
-                                             'Treatment')
-    node_dfs.extend(trt_node_dfs)
-    rels_dfs.extend(trt_rels_dfs)
-
-    # Parse ODS:
-    trt_node_dfs, trt_rels_dfs = parse_ods([import_plate(args[4]),
-                                            import_plate(args[5])])
-    node_dfs.extend(trt_node_dfs)
-    rels_dfs.extend(trt_rels_dfs)
-
-    # Convert DataFrames to csv:
-    node_files = _get_filenames(node_dfs, 'node')
-    rels_files = _get_filenames(rels_dfs, 'rels')
-
-    # Populate database:
-    utils.create_db(args[6], node_files, rels_files)
+    import_sts(*args)
 
 
 if __name__ == '__main__':

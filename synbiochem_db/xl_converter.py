@@ -27,7 +27,7 @@ def convert(xl_filename):
         csv_filename = os.path.join(dir_name, sheet.name + '.csv')
 
         with open(csv_filename, 'wb') as csv_file:
-            writer = csv.writer(csv_file, quoting=csv.QUOTE_ALL)
+            writer = csv.writer(csv_file)
 
             for rownum in xrange(sheet.nrows):
                 writer.writerow(sheet.row_values(rownum))
