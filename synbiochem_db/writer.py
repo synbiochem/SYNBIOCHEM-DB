@@ -21,80 +21,75 @@ class Writer(object):
         '''Close.'''
         self.__driver.close()
 
-    def write_project(self, name):
-        '''Write project.'''
-        with self.__driver.session() as session:
-            return session.write_transaction(_write_project, name)
-
-    def write_designs(self, designs):
+    def write(self, obj):
         '''Write designs.'''
         with self.__driver.session() as session:
-            return session.write_transaction(_write_designs, designs)
+            return session.write_transaction(_write, obj)
 
 
-def _write_project(trx, name):
-    return trx.run('MERGE (n:Project {name: $name}) '
-                   'RETURN n', name=name)
+def _write(trx, obj, idx=-1, rel=None, parent=None):
+    '''Write an object recursively.'''
+    label = obj.pop('label')
 
+    props = '{' + \
+        ','.join([key + ':\'' + str(value) + '\''
+                  for key, value in obj.iteritems()
+                  if not isinstance(value, list)]) + \
+        '}'
 
-def _write_designs(trx, designs):
-    for design in designs['designs']:
-        _write_design(trx, design, designs['project'])
+    node_identity = label + ' ' + props
 
+    trx.run('MERGE (n:' + node_identity + ') RETURN n')
 
-def _write_design(trx, design, proj_name):
-    trx.run('MERGE (d:Design {id: $des_id})<-[:CONTAINS]-(p:Project '
-            '{name: $proj_name}) '
-            'RETURN d, p', des_id=design['id'], proj_name=proj_name)
+    if parent:
+        trx.run(
+            'MATCH (par: ' + parent + '), (chl: ' + node_identity + ') '
+            'WITH par, chl '
+            'MERGE (par)-[rel:' + rel + ' {index: $idx}]->(chl) '
+            ' RETURN par, rel, chl', idx=idx)
 
-    for plasmid in design['plasmids']:
-        _write_plasmid(trx, plasmid, design['id'])
-
-
-def _write_plasmid(trx, plasmid, des_id):
-    trx.run('MERGE (p:Plasmid {id: $plas_id})<-[:CONTAINS]-(d:Design '
-            '{id: $des_id}) '
-            'RETURN p, d', plas_id=plasmid['id'], des_id=des_id)
-
-    for idx, part in enumerate(plasmid['parts']):
-        _write_part(trx, part, idx, plasmid['id'])
-
-
-def _write_part(trx, part, idx, plas_id):
-    trx.run('MERGE (pt:Part {id: $part_id})<-[:CONTAINS '
-            '{index: $idx}]-(pl:Plasmid '
-            '{id: $plas_id}) '
-            'RETURN pt, pl', part_id=part['id'], plas_id=plas_id, idx=idx)
+    for key, value in obj.iteritems():
+        if isinstance(value, list):
+            for val_idx, val in enumerate(value):
+                _write(trx, val, val_idx, key, node_identity)
 
 
 def main(args):
     '''main method.'''
     wrt = Writer(*args)
-    wrt.write_project('Alkaloids')
 
-    designs = {'project': 'Alkaloids',
-               'designs': [
+    project = {'id': 'Project 1',
+               'name': 'Project 1',
+               'label': 'Project',
+               'contains': [
                    {'id': 'Design 1',
-                    'plasmids': [
+                    'label': 'Design',
+                    'contains': [
                         {
                             'id': 'Plasmid 1',
-                            'parts': [
+                            'label': 'Plasmid',
+                            'built_from': [
                                 {
-                                    'id': 'Part 1'
+                                    'id': 'Part 1',
+                                    'label': 'Part'
                                 },
                                 {
-                                    'id': 'Part 2'
+                                    'id': 'Part 2',
+                                    'label': 'Part'
                                 }
                             ]
                         },
                         {
                             'id': 'Plasmid 2',
-                            'parts': [
+                            'label': 'Plasmid',
+                            'built_from': [
                                 {
-                                    'id': 'Part 3'
+                                    'id': 'Part 3',
+                                    'label': 'Part'
                                 },
                                 {
-                                    'id': 'Part 4'
+                                    'id': 'Part 4',
+                                    'label': 'Part'
                                 }
                             ]
                         }
@@ -103,7 +98,33 @@ def main(args):
                ]
                }
 
-    wrt.write_designs(designs)
+    wrt.write(project)
+
+    plate = {'id': 'Plate 1',
+             'name': 'Plate 1',
+             'label': 'Plate',
+             'contains': [
+                 {
+                     'row': 'A',
+                     'col': 1,
+                     'label': 'Well',
+                     'holds': [
+                              {
+                                  'id': 'Plasmid 8',
+                                  'label': 'Plasmid',
+                                  'contains': [
+                                      {
+                                          'id': 'Part 3',
+                                          'label': 'Part'
+                                      }
+                                  ]
+                              }
+                     ]
+                 },
+             ]
+             }
+
+    wrt.write(plate)
 
 
 if __name__ == '__main__':
