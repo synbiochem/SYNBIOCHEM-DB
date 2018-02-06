@@ -1,5 +1,5 @@
 '''
-SYNBIOCHEM-DB (c) University of Manchester 2017
+SYNBIOCHEM-DB (c) University of Manchester 2018
 
 SYNBIOCHEM-DB is licensed under the MIT License.
 
@@ -12,9 +12,8 @@ import os
 import shutil
 import sys
 
-from gg_utils.neo4j import utils
+from synbiochem.utils import xl_converter, neo4j_utils
 import pandas as pd
-from synbiochem_db import xl_converter
 
 
 def import_sts(xl_filename, neo4j_root):
@@ -58,7 +57,7 @@ def import_sts(xl_filename, neo4j_root):
     rels_files = _get_filenames(rels_dfs, 'rels')
 
     # Populate database:
-    utils.create_db(neo4j_root, node_files, rels_files)
+    neo4j_utils.create_db(neo4j_root, node_files, rels_files)
 
     # Clean-up:
     _clean_up(node_files, rels_files, dir_name)
