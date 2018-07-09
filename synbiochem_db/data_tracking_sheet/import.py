@@ -13,6 +13,7 @@ import shutil
 import sys
 
 from synbiochem.utils import xl_converter, neo4j_utils
+
 import pandas as pd
 
 
@@ -57,7 +58,8 @@ def import_sts(xl_filename, neo4j_root):
     rels_files = _get_filenames(rels_dfs, 'rels')
 
     # Populate database:
-    neo4j_utils.create_db(neo4j_root, node_files, rels_files)
+    neo4j_utils.create_db(neo4j_root, node_files, rels_files, delimiter=',',
+                          array_delimiter=';')
 
     # Clean-up:
     _clean_up(node_files, rels_files, dir_name)
